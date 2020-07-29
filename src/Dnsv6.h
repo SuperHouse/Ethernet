@@ -5,7 +5,7 @@
 #ifndef DNSClientv6_h
 #define DNSClientv6_h
 
-#include "Ethernet.h"
+#include "SuperHouse_Ethernet.h"
 
 class DNSClientv6
 {

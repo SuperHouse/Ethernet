@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "Ethernet.h"
+#include "SuperHouse_Ethernet.h"
 #include "AddressAutoConfig.h"
 #include "utility/w5100.h"
 

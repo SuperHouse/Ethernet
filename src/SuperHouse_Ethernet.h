@@ -18,8 +18,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ethernet_h_
-#define ethernet_h_
+#ifndef superhouse_ethernet_h_
+#define superhouse_ethernet_h_
 
 // All symbols exposed to Arduino sketches are contained in this header file
 //
