@@ -28,15 +28,42 @@
 
 #include <Arduino.h>
 #include "Ethernet.h"
-#include "Dns.h"
+#include "Dnsv6.h"
 #include "utility/w5100.h"
 
 /* Start EthernetUDP socket, listening at local port PORT */
-uint8_t EthernetUDP::begin(uint16_t port)
+uint8_t EthernetUDPv6::begin(uint16_t port)
 {
-	if (sockindex < MAX_SOCK_NUM) Ethernet.socketClose(sockindex);
-	sockindex = Ethernet.socketBegin(SnMR::UDP, port);
+	#if 0
+	PRINTVAR(port);
+	#endif
+
+	if (sockindex < MAX_SOCK_NUM) Ethernetv6.socketClose(sockindex);
+	sockindex = Ethernetv6.socketBegin(SnMR::UDP6, port);
+
+	// Set Source IPv6 to GUA
+	W5100.writeSnPSR(sockindex, W6100_SnPSR_GUA);
+
 	if (sockindex >= MAX_SOCK_NUM) return 0;
+	_port = port;
+	_remaining = 0;
+	return 1;
+}
+
+uint8_t EthernetUDPv6::begin(uint16_t port, uint8_t ipv4)
+{
+	if(ipv4 == 1)
+	{
+		#if 0
+		PRINTSTR(IPv4);
+		#endif
+	}
+	if (sockindex < MAX_SOCK_NUM) Ethernetv6.socketClose(sockindex);
+	PRINTLINE();
+	sockindex = Ethernetv6.socketBegin(SnMR::UDP, port);
+	PRINTLINE();
+	if (sockindex >= MAX_SOCK_NUM) return 0;
+	PRINTLINE();
 	_port = port;
 	_remaining = 0;
 	return 1;
@@ -44,59 +71,59 @@ uint8_t EthernetUDP::begin(uint16_t port)
 
 /* return number of bytes available in the current packet,
    will return zero if parsePacket hasn't been called yet */
-int EthernetUDP::available()
+int EthernetUDPv6::available()
 {
 	return _remaining;
 }
 
 /* Release any resources being used by this EthernetUDP instance */
-void EthernetUDP::stop()
+void EthernetUDPv6::stop()
 {
 	if (sockindex < MAX_SOCK_NUM) {
-		Ethernet.socketClose(sockindex);
+		Ethernetv6.socketClose(sockindex);
 		sockindex = MAX_SOCK_NUM;
 	}
 }
 
-int EthernetUDP::beginPacket(const char *host, uint16_t port)
+int EthernetUDPv6::beginPacket(const char *host, uint16_t port)
 {
 	// Look up the host first
 	int ret = 0;
-	DNSClient dns;
-	IPAddress remote_addr;
+	DNSClientv6 dns;
+	IP6Address remote_addr;
 
-	dns.begin(Ethernet.dnsServerIP());
+	dns.begin(Ethernetv6.dnsServerIP());
 	ret = dns.getHostByName(host, remote_addr);
 	if (ret != 1) return ret;
 	return beginPacket(remote_addr, port);
 }
 
-int EthernetUDP::beginPacket(IPAddress ip, uint16_t port)
+int EthernetUDPv6::beginPacket(IP6Address ip, uint16_t port)
 {
 	_offset = 0;
 	//Serial.printf("UDP beginPacket\n");
-	return Ethernet.socketStartUDP(sockindex, rawIPAddress(ip), port);
+	return Ethernetv6.socketStartUDP(sockindex, rawIPAddress(ip), port);
 }
 
-int EthernetUDP::endPacket()
+int EthernetUDPv6::endPacket()
 {
-	return Ethernet.socketSendUDP(sockindex);
+	return Ethernetv6.socketSendUDP(sockindex);
 }
 
-size_t EthernetUDP::write(uint8_t byte)
+size_t EthernetUDPv6::write(uint8_t byte)
 {
 	return write(&byte, 1);
 }
 
-size_t EthernetUDP::write(const uint8_t *buffer, size_t size)
+size_t EthernetUDPv6::write(const uint8_t *buffer, size_t size)
 {
 	//Serial.printf("UDP write %d\n", size);
-	uint16_t bytes_written = Ethernet.socketBufferData(sockindex, _offset, buffer, size);
+	uint16_t bytes_written = Ethernetv6.socketBufferData(sockindex, _offset, buffer, size);
 	_offset += bytes_written;
 	return bytes_written;
 }
 
-int EthernetUDP::parsePacket()
+int EthernetUDPv6::parsePacket()
 {
 	// discard any remaining bytes in the last packet
 	while (_remaining) {
@@ -106,7 +133,7 @@ int EthernetUDP::parsePacket()
 		read((uint8_t *)NULL, _remaining);
 	}
 
-	if (Ethernet.socketRecvAvailable(sockindex) > 0) {
+	if (Ethernetv6.socketRecvAvailable(sockindex) > 0) {
 		//HACK - hand-parse the UDP packet using TCP recv method
 		uint8_t tmpBuf[20];
 		int ret=0;
@@ -114,7 +141,7 @@ int EthernetUDP::parsePacket()
 
 		if(W5100.getChip() == 61) {
 			//read 2 header bytes and get one IPv4 or IPv6
-			ret = Ethernet.socketRecv(sockindex, tmpBuf, 2);
+			ret = Ethernetv6.socketRecv(sockindex, tmpBuf, 2);
 			if(ret > 0) {
 				_remaining = (tmpBuf[0] & (0x7))<<8 | tmpBuf[1];
 
@@ -125,7 +152,7 @@ int EthernetUDP::parsePacket()
 					// 18 19
 
 					//read 16 header bytes and get IP and port from it
-					ret = Ethernet.socketRecv(sockindex, &tmpBuf[2], 18);
+					ret = Ethernetv6.socketRecv(sockindex, &tmpBuf[2], 18);
 					_remoteIP = &tmpBuf[2];					
 					_remotePort = (tmpBuf[18]<<8) | tmpBuf[19];
 				} else {
@@ -135,7 +162,7 @@ int EthernetUDP::parsePacket()
 					// 6 7
 
 					//read 6 header bytes and get IP and port from it
-					ret = Ethernet.socketRecv(sockindex, &tmpBuf[2], 6);
+					ret = Ethernetv6.socketRecv(sockindex, &tmpBuf[2], 6);
 					_remoteIP = &tmpBuf[2];
 					_remotePort = (tmpBuf[6]<<8) | tmpBuf[7];
 				}
@@ -144,7 +171,7 @@ int EthernetUDP::parsePacket()
 			}
 		} else {
 			//read 8 header bytes and get IP and port from it
-			ret = Ethernet.socketRecv(sockindex, tmpBuf, 8);
+			ret = Ethernetv6.socketRecv(sockindex, tmpBuf, 8);
 
 			if (ret > 0) {
 
@@ -164,11 +191,11 @@ int EthernetUDP::parsePacket()
 	return 0;
 }
 
-int EthernetUDP::read()
+int EthernetUDPv6::read()
 {
 	uint8_t byte;
 
-	if ((_remaining > 0) && (Ethernet.socketRecv(sockindex, &byte, 1) > 0)) {
+	if ((_remaining > 0) && (Ethernetv6.socketRecv(sockindex, &byte, 1) > 0)) {
 		// We read things without any problems
 		_remaining--;
 		return byte;
@@ -178,17 +205,17 @@ int EthernetUDP::read()
 	return -1;
 }
 
-int EthernetUDP::read(unsigned char *buffer, size_t len)
+int EthernetUDPv6::read(unsigned char *buffer, size_t len)
 {
 	if (_remaining > 0) {
 		int got;
 		if (_remaining <= len) {
 			// data should fit in the buffer
-			got = Ethernet.socketRecv(sockindex, buffer, _remaining);
+			got = Ethernetv6.socketRecv(sockindex, buffer, _remaining);
 		} else {
 			// too much data for the buffer,
 			// grab as much as will fit
-			got = Ethernet.socketRecv(sockindex, buffer, len);
+			got = Ethernetv6.socketRecv(sockindex, buffer, len);
 		}
 		if (got > 0) {
 			_remaining -= got;
@@ -200,25 +227,25 @@ int EthernetUDP::read(unsigned char *buffer, size_t len)
 	return -1;
 }
 
-int EthernetUDP::peek()
+int EthernetUDPv6::peek()
 {
 	// Unlike recv, peek doesn't check to see if there's any data available, so we must.
 	// If the user hasn't called parsePacket yet then return nothing otherwise they
 	// may get the UDP header
 	if (sockindex >= MAX_SOCK_NUM || _remaining == 0) return -1;
-	return Ethernet.socketPeek(sockindex);
+	return Ethernetv6.socketPeek(sockindex);
 }
 
-void EthernetUDP::flush()
+void EthernetUDPv6::flush()
 {
 	// TODO: we should wait for TX buffer to be emptied
 }
 
 /* Start EthernetUDP socket, listening at local port PORT */
-uint8_t EthernetUDP::beginMulticast(IPAddress ip, uint16_t port)
+uint8_t EthernetUDPv6::beginMulticast(IP6Address ip, uint16_t port)
 {
-	if (sockindex < MAX_SOCK_NUM) Ethernet.socketClose(sockindex);
-	sockindex = Ethernet.socketBeginMulticast(SnMR::UDP | SnMR::MULTI, ip, port);
+	if (sockindex < MAX_SOCK_NUM) Ethernetv6.socketClose(sockindex);
+	sockindex = Ethernetv6.socketBeginMulticast(SnMR::UDP6 | SnMR::MULTI, ip, port);
 	if (sockindex >= MAX_SOCK_NUM) return 0;
 	_port = port;
 	_remaining = 0;
